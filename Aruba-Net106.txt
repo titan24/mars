@@ -1,0 +1,219 @@
+﻿(ArubaS2500-48P) (dhcp-snooping-profile "default") #show running-config        Building Configuration...
+
+#
+# Configuration file for ArubaOS
+# ArubaOS Version 7.4.1.12 72393
+version 7.4
+enable secret "******"
+hostname "ArubaS2500-48P"
+clock timezone PST -8
+controller config 3
+ip access-list eth validuserethacl
+  permit any
+!
+netservice svc-dhcp udp 67 68
+netservice svc-dns udp 53
+netservice svc-ftp tcp 21
+netservice svc-h323-tcp tcp 1720
+netservice svc-h323-udp udp 1718 1719
+netservice svc-http tcp 80
+netservice svc-https tcp 443
+netservice svc-icmp 1
+netservice svc-kerberos udp 88
+netservice svc-natt udp 4500
+netservice svc-ntp udp 123
+netservice svc-sip-tcp tcp 5060
+netservice svc-sip-udp udp 5060
+netservice svc-sips tcp 5061
+netservice svc-smtp tcp 25
+netservice svc-ssh tcp 22
+netservice svc-telnet tcp 23
+netservice svc-tftp udp 69
+netservice svc-vocera udp 5002
+ip access-list stateless allowall-stateless
+  any any any  permit
+!
+ip access-list stateless cplogout-stateless
+  user   alias controller sys-svc-https  dst-nat 8081
+!
+ip access-list stateless dhcp-acl-stateless
+  any any svc-dhcp  permit
+!
+ip access-list stateless dns-acl-stateless
+  any any svc-dns  permit
+!
+ip access-list stateless http-acl-stateless
+  any any svc-http  permit
+!
+ip access-list stateless https-acl-stateless
+  any any svc-https  permit
+!
+ip access-list stateless icmp-acl-stateless
+  any any svc-icmp  permit
+!
+ip access-list stateless logon-control-stateless
+  any any svc-icmp  permit
+  any any svc-dns  permit
+  any any svc-dhcp  permit
+  any any svc-natt  permit
+!
+ip access-list session validuser
+  network 169.254.0.0 255.255.0.0 any any  deny
+  any any any  permit
+!
+user-role authenticated
+ access-list stateless allowall-stateless
+!
+user-role denyall
+!
+user-role denydhcp
+ access-list stateless dhcp-acl-stateless
+!
+user-role guest
+ access-list stateless http-acl-stateless
+ access-list stateless https-acl-stateless
+ access-list stateless dhcp-acl-stateless
+ access-list stateless icmp-acl-stateless
+ access-list stateless dns-acl-stateless
+!
+user-role logon
+ access-list stateless logon-control-stateless
+!
+user-role preauth
+!
+!
+
+crypto ipsec transform-set default-boc-bm-transform esp-aes256 esp-sha-hmac
+crypto ipsec transform-set default-rap-transform esp-aes256 esp-sha-hmac
+
+
+mgmt-user admin root 91907bbc012d5d45c8f3f2ff10e4b1d27e7f572a989d2fdfa6
+
+
+
+firewall disable-stateful-h323-processing
+!
+ip domain lookup
+!
+ip name-server 192.168.22.21
+!
+aaa authentication mac "default"
+!
+aaa authentication dot1x "default"
+!
+aaa server-group "default"
+ auth-server Internal
+ set role condition role value-of
+!
+aaa profile "default"
+!
+aaa authentication captive-portal "default"
+!
+aaa authentication vpn "default"
+!
+aaa authentication mgmt
+!
+aaa authentication wired
+!
+web-server
+!
+papi-security
+!
+aaa password-policy mgmt
+!
+traceoptions
+!
+probe-profile "default"
+   protocol icmp
+!
+qos-profile "default"
+!
+policer-profile "default"
+!
+ip-profile
+   default-gateway 172.22.106.1
+!
+lcd-menu
+!
+interface-profile ospf-profile "default"
+   area 0.0.0.0
+!
+interface-profile pim-profile "default"
+!
+interface-profile igmp-profile "default"
+!
+stack-profile
+!
+ipv6-profile
+!
+activate-service-firmware
+!
+aruba-central
+!
+rogue-ap-containment
+!
+interface-profile switching-profile "default"
+!
+interface-profile poe-profile "default"
+!
+interface-profile poe-profile "poe-factory-initial"
+   enable
+!
+interface-profile enet-link-profile "default"
+!
+interface-profile lldp-profile "default"
+!
+interface-profile lldp-profile "lldp-factory-initial"
+   lldp transmit
+   lldp receive
+!
+interface-profile mstp-profile "default"
+!
+interface-profile pvst-port-profile "default"
+!
+vlan-profile dhcp-snooping-profile "default"
+!
+vlan-profile mld-snooping-profile "default"
+!
+vlan-profile igmp-snooping-profile "default"
+!
+vlan-profile igmp-snooping-profile "igmp-snooping-factory-initial"
+!
+spanning-tree
+   mode mstp
+!
+gvrp
+!
+mstp
+!
+lacp
+!
+vlan "1"
+   igmp-snooping-profile "igmp-snooping-factory-initial"
+!
+interface vlan "1"
+!
+interface mgmt
+!
+device-group ap
+!
+interface-group gigabitethernet "default"
+   apply-to ALL
+   lldp-profile "lldp-factory-initial"
+   poe-profile "poe-factory-initial"
+!
+
+snmp-server community Zer0t0uchpr0visi0ning view ALL
+snmp-server view ALL oid-tree iso included
+snmp-server group ALLPRIV v1 read ALL notify ALL
+snmp-server group ALLPRIV v2c read ALL notify ALL
+snmp-server group ALLPRIV v3 noauth read ALL notify ALL
+snmp-server group AUTHPRIV v3 priv read ALL notify ALL
+snmp-server group AUTHNOPRIV v3 auth read ALL notify ALL
+snmp-server group Zer0t0uchpr0visi0ning v1 read ALL
+snmp-server group Zer0t0uchpr0visi0ning v2c read ALL
+
+snmp-server enable trap
+
+process monitor log
+end
