@@ -564,7 +564,7 @@ function _removeSectionClip() {
  */
 function ssSave() {
 	var cam    = viewer.scene.camera;
-	var target = viewer.scene.view.getPivot
+	var target = (typeof viewer.scene.view.getPivot === "function")
 	             ? viewer.scene.view.getPivot()
 	             : viewer.scene.view.position.clone();
 
