@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>ZAMOK — 3D Viewer</title>
+
+	<link rel="stylesheet" type="text/css" href="../libs/potree/potree.css">
+	<link rel="stylesheet" type="text/css" href="../libs/jquery-ui/jquery-ui.min.css">
+	<link rel="stylesheet" type="text/css" href="../libs/openlayers3/ol.css">
+	<link rel="stylesheet" type="text/css" href="../libs/spectrum/spectrum.css">
+	<link rel="stylesheet" type="text/css" href="../libs/jstree/themes/mixed/style.css">
+
+	<style>
+		body {
+			margin: 0;
+			padding: 0;
+			font-family: Arial, sans-serif;
+			background: #1a1a2e;
+			color: #e0e0e0;
+			overflow: hidden;
+		}
+
+		#potree_render_area {
+			position: absolute;
+			top: 0; left: 0;
+			right: 0; bottom: 0;
+		}
+
+		/* ── Top toolbar ── */
+		#toolbar {
+			position: absolute;
+			top: 10px; left: 50%;
+			transform: translateX(-50%);
+			display: flex;
+			gap: 8px;
+			z-index: 100;
+			background: rgba(20,20,40,0.85);
+			padding: 8px 16px;
+			border-radius: 8px;
+			backdrop-filter: blur(4px);
+			box-shadow: 0 2px 12px rgba(0,0,0,0.5);
+		}
+
+		.toolbar-btn {
+			padding: 6px 14px;
+			border: 1px solid #4a4a8a;
+			border-radius: 6px;
+			background: #252555;
+			color: #c0c0e0;
+			cursor: pointer;
+			font-size: 13px;
+			transition: background 0.2s, color 0.2s;
+			white-space: nowrap;
+		}
+		.toolbar-btn:hover  { background: #3a3a7a; color: #fff; }
+		.toolbar-btn.active { background: #5a5aaa; color: #fff; border-color: #8080cc; }
+
+		/* ── Floor-plan panel ── */
+		#panel-floorplan {
+			display: none;
+			position: absolute;
+			top: 60px; right: 10px;
+			width: 240px;
+			z-index: 100;
+			background: rgba(20,20,40,0.92);
+			border-radius: 8px;
+			padding: 12px 14px;
+			box-shadow: 0 2px 12px rgba(0,0,0,0.6);
+		}
+		#panel-floorplan h3 {
+			margin: 0 0 10px 0;
+			font-size: 14px;
+			color: #aaaadd;
+			border-bottom: 1px solid #333;
+			padding-bottom: 6px;
+		}
+		.fp-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+		.fp-row label { font-size: 12px; color: #aaa; min-width: 70px; }
+		.fp-row input[type=range] { flex: 1; }
+		.fp-row span { font-size: 12px; min-width: 40px; text-align: right; color: #ddd; }
+
+		/* ── Section / Clipping panel ── */
+		#panel-section {
+			display: none;
+			position: absolute;
+			top: 60px; left: 10px;
+			width: 240px;
+			z-index: 100;
+			background: rgba(20,20,40,0.92);
+			border-radius: 8px;
+			padding: 12px 14px;
+			box-shadow: 0 2px 12px rgba(0,0,0,0.6);
+		}
+		#panel-section h3 {
+			margin: 0 0 10px 0;
+			font-size: 14px;
+			color: #aaaadd;
+			border-bottom: 1px solid #333;
+			padding-bottom: 6px;
+		}
+		.sec-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+		.sec-row label { font-size: 12px; color: #aaa; min-width: 60px; }
+		.sec-row input[type=range] { flex: 1; }
+		.sec-row span { font-size: 12px; min-width: 46px; text-align: right; color: #ddd; }
+		.sec-axis-group { display: flex; gap: 6px; }
+		.sec-axis-group label { min-width: unset; cursor: pointer; }
+
+		/* ── Save-state panel ── */
+		#panel-savestate {
+			display: none;
+			position: absolute;
+			bottom: 10px; right: 10px;
+			width: 220px;
+			z-index: 100;
+			background: rgba(20,20,40,0.92);
+			border-radius: 8px;
+			padding: 12px 14px;
+			box-shadow: 0 2px 12px rgba(0,0,0,0.6);
+		}
+		#panel-savestate h3 {
+			margin: 0 0 10px 0;
+			font-size: 14px;
+			color: #aaaadd;
+			border-bottom: 1px solid #333;
+			padding-bottom: 6px;
+		}
+		#slot-list { list-style: none; margin: 0 0 8px 0; padding: 0; max-height: 140px; overflow-y: auto; }
+		#slot-list li {
+			display: flex; gap: 6px; align-items: center;
+			padding: 4px 0;
+			border-bottom: 1px solid #2a2a4a;
+			font-size: 12px;
+		}
+		#slot-list li span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #ccc; }
+		#slot-list li button { padding: 2px 7px; font-size: 11px; border: 1px solid #4a4a8a; background: #252555; color: #aaa; border-radius: 4px; cursor: pointer; }
+		#slot-list li button:hover { background: #3a3a7a; color: #fff; }
+		#slot-list li button.del { border-color: #883333; background: #331111; color: #cc7777; }
+		#slot-list li button.del:hover { background: #551111; color: #ffaaaa; }
+
+		.ss-row { display: flex; gap: 6px; }
+		.ss-row input { flex: 1; padding: 4px 8px; font-size: 12px; background: #1e1e3e; border: 1px solid #4a4a8a; color: #ddd; border-radius: 4px; }
+		.ss-row button { padding: 4px 10px; font-size: 12px; background: #3a3a7a; border: 1px solid #5555aa; color: #ddd; border-radius: 4px; cursor: pointer; }
+		.ss-row button:hover { background: #5050aa; color: #fff; }
+
+		/* ── Info overlay ── */
+		#info-overlay {
+			position: absolute;
+			bottom: 10px; left: 10px;
+			z-index: 50;
+			font-size: 11px;
+			color: #555;
+			pointer-events: none;
+		}
+	</style>
+</head>
+
+<body>
+
+<!-- ══════════════════════════════════════════════════════
+     Render canvas (Potree takes the full screen)
+═══════════════════════════════════════════════════════ -->
+<div id="potree_render_area"></div>
+<div id="potree_sidebar_container"></div>
+
+<!-- ══════════════════════════════════════════════════════
+     Top toolbar
+═══════════════════════════════════════════════════════ -->
+<div id="toolbar">
+	<button class="toolbar-btn" id="btn-home"     onclick="goHome()">🏠 Додому</button>
+	<button class="toolbar-btn" id="btn-floorplan" onclick="toggleFloorPlanPanel()">📐 Поверх</button>
+	<button class="toolbar-btn" id="btn-section"   onclick="toggleSectionPanel()">✂️ Розріз</button>
+	<button class="toolbar-btn" id="btn-savestate" onclick="toggleSaveStatePanel()">💾 Стан</button>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     Floor-plan panel
+═══════════════════════════════════════════════════════ -->
+<div id="panel-floorplan">
+	<h3>📐 Вид поверху</h3>
+	<div style="margin-bottom:8px;">
+		<label style="font-size:12px;color:#aaa;">Вісь перегляду:</label>
+		<div class="sec-axis-group" style="margin-top:4px;">
+			<label><input type="radio" name="fpAxis" value="top"   checked onchange="fpAxisChange(this)"> Зверху</label>
+			<label><input type="radio" name="fpAxis" value="front"       onchange="fpAxisChange(this)"> Спереду</label>
+		</div>
+	</div>
+	<div class="fp-row">
+		<label>Рівень:</label>
+		<input type="range" id="fp-level" min="-50" max="50" step="0.5" value="0"
+		       oninput="fpLevelChange(this.value)">
+		<span id="fp-level-val">0.0</span>
+	</div>
+	<div class="fp-row">
+		<label>Товщина:</label>
+		<input type="range" id="fp-thick" min="0.1" max="20" step="0.1" value="5"
+		       oninput="fpThickChange(this.value)">
+		<span id="fp-thick-val">5.0</span>
+	</div>
+	<div style="display:flex; gap:6px; margin-top:10px;">
+		<button class="toolbar-btn" style="flex:1;" id="btn-fp-toggle" onclick="toggleFloorPlan()">Увімкнути</button>
+		<button class="toolbar-btn" onclick="toggleFloorPlanPanel()">✕</button>
+	</div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     Section / Clipping panel
+═══════════════════════════════════════════════════════ -->
+<div id="panel-section">
+	<h3>✂️ Розріз (площина)</h3>
+	<div style="margin-bottom:8px;">
+		<label style="font-size:12px;color:#aaa;">Вісь нормалі:</label>
+		<div class="sec-axis-group" style="margin-top:4px;">
+			<label><input type="radio" name="secAxis" value="X" onchange="secAxisChange('X')"> X</label>
+			<label><input type="radio" name="secAxis" value="Y" onchange="secAxisChange('Y')"> Y</label>
+			<label><input type="radio" name="secAxis" value="Z" checked onchange="secAxisChange('Z')"> Z</label>
+		</div>
+	</div>
+	<div class="sec-row">
+		<label>Позиція:</label>
+		<input type="range" id="sec-pos" min="-50" max="50" step="0.1" value="0"
+		       oninput="secPosChange(this.value)">
+		<span id="sec-pos-val">0.0</span>
+	</div>
+	<div style="margin-bottom:8px;">
+		<label style="font-size:12px;color:#aaa;">
+			<input type="checkbox" id="sec-flip" onchange="secFlipChange()"> Перевернути
+		</label>
+	</div>
+	<div style="display:flex; gap:6px; margin-top:10px;">
+		<button class="toolbar-btn" style="flex:1;" id="btn-sec-toggle" onclick="toggleSection()">Увімкнути</button>
+		<button class="toolbar-btn" onclick="toggleSectionPanel()">✕</button>
+	</div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     Save-state panel
+═══════════════════════════════════════════════════════ -->
+<div id="panel-savestate">
+	<h3>💾 Збережені стани</h3>
+	<ul id="slot-list"></ul>
+	<div class="ss-row">
+		<input type="text" id="ss-name" placeholder="Назва...">
+		<button onclick="ssSave()">Зберегти</button>
+	</div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     Info
+═══════════════════════════════════════════════════════ -->
+<div id="info-overlay">ZAMOK · Potree Viewer</div>
+
+
+<!-- ══════════════════════════════════════════════════════
+     Scripts
+═══════════════════════════════════════════════════════ -->
+<script src="../libs/jquery/jquery-3.1.1.min.js"></script>
+<script src="../libs/spectrum/spectrum.js"></script>
+<script src="../libs/jquery-ui/jquery-ui.min.js"></script>
+<script src="../libs/other/BinaryHeap.js"></script>
+<script src="../libs/tween/tween.min.js"></script>
+<script src="../libs/d3/d3.js"></script>
+<script src="../libs/proj4/proj4.js"></script>
+<script src="../libs/openlayers3/ol.js"></script>
+<script src="../libs/i18n/i18n.js"></script>
+<script src="../libs/jstree/jstree.js"></script>
+<script src="../libs/potree/potree.js"></script>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════════
+   GLOBALS
+═══════════════════════════════════════════════════════════════════════ */
+"use strict";
+
+/** @type {Potree.Viewer} */
+var viewer;
+
+// Floor-plan state
+var fpActive   = false;       // floor-plan mode ON/OFF
+var fpAxisVal  = "top";       // "top" | "front"
+var fpLevel    = 0;
+var fpThick    = 5;
+
+// Section (clipping plane) state
+var secActive  = false;
+var secAxis    = "Z";
+var secPos     = 0;
+var secFlipped = false;
+/** @type {Potree.ClipVolume|null} */
+var secVolume  = null;
+
+// Saved states (array of {name, data})
+var savedStates = [];
+
+/* ═══════════════════════════════════════════════════════════════════════
+   INIT
+═══════════════════════════════════════════════════════════════════════ */
+window.addEventListener("load", function () {
+
+	viewer = new Potree.Viewer(document.getElementById("potree_render_area"));
+
+	viewer.setEDLEnabled(true);
+	viewer.setFOV(60);
+	viewer.setPointBudget(2_000_000);
+	viewer.setBackground("gradient");
+	viewer.loadSettingsFromURL();
+
+	viewer.loadGUI(() => {
+		viewer.setLanguage("uk");
+		$("#menu_appearance").next().show();
+		viewer.toggleSidebar();
+	});
+
+	// Load cloud
+	Potree.loadPointCloud("../pointclouds/zamok/cloud.js", "Zamok", function (e) {
+		viewer.scene.addPointCloud(e.pointcloud);
+
+		var material = e.pointcloud.material;
+		material.size          = 1;
+		material.pointSizeType = Potree.PointSizeType.ADAPTIVE;
+		material.shape         = Potree.PointShape.SQUARE;
+
+		viewer.fitToScreen();
+	});
+
+	// Restore states from localStorage
+	ssRestoreFromStorage();
+});
+
+/* ═══════════════════════════════════════════════════════════════════════
+   NAVIGATION
+═══════════════════════════════════════════════════════════════════════ */
+function goHome() {
+	viewer.fitToScreen(0.75);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   PANEL TOGGLES
+═══════════════════════════════════════════════════════════════════════ */
+function toggleFloorPlanPanel() {
+	var p = document.getElementById("panel-floorplan");
+	p.style.display = p.style.display === "block" ? "none" : "block";
+	document.getElementById("btn-floorplan").classList.toggle("active", p.style.display === "block");
+}
+
+function toggleSectionPanel() {
+	var p = document.getElementById("panel-section");
+	p.style.display = p.style.display === "block" ? "none" : "block";
+	document.getElementById("btn-section").classList.toggle("active", p.style.display === "block");
+}
+
+function toggleSaveStatePanel() {
+	var p = document.getElementById("panel-savestate");
+	p.style.display = p.style.display === "block" ? "none" : "block";
+	document.getElementById("btn-savestate").classList.toggle("active", p.style.display === "block");
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   FLOOR-PLAN
+═══════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Activate or deactivate floor-plan mode.
+ *
+ * @param {boolean} [skipView=false]
+ *   When TRUE the camera view is NOT reset (used when restoring a saved
+ *   state so that the previously-saved camera position is not overwritten
+ *   by setTopView / setFrontView).
+ */
+function enterFloorPlan(skipView) {
+	if (skipView === undefined) { skipView = false; }
+
+	fpActive = true;
+	document.getElementById("btn-fp-toggle").textContent = "Вимкнути";
+	document.getElementById("btn-fp-toggle").classList.add("active");
+
+	// Apply the clipping slice that simulates a floor-level cut
+	_applyFpClip();
+
+	// Only set the camera view when NOT restoring a saved state.
+	// viewer.setTopView() / setFrontView() internally trigger TWEEN
+	// animations that would overwrite any camera position restored after
+	// this call, destroying the saved view.
+	if (!skipView) {
+		fpSetView();
+	}
+}
+
+function exitFloorPlan() {
+	fpActive = false;
+	document.getElementById("btn-fp-toggle").textContent = "Увімкнути";
+	document.getElementById("btn-fp-toggle").classList.remove("active");
+
+	// Remove floor-plan clipping volumes from the scene
+	_removeFpClip();
+}
+
+function toggleFloorPlan() {
+	if (fpActive) {
+		exitFloorPlan();
+	} else {
+		// Normal user interaction: reset view to top/front
+		enterFloorPlan(false);
+	}
+}
+
+/** Set camera view to top or front depending on the selected axis. */
+function fpSetView() {
+	if (fpAxisVal === "top") {
+		viewer.setTopView();
+	} else {
+		viewer.setFrontView();
+	}
+}
+
+function fpAxisChange(radio) {
+	fpAxisVal = radio.value;
+	if (fpActive) {
+		fpSetView();
+	}
+}
+
+function fpLevelChange(val) {
+	fpLevel = parseFloat(val);
+	document.getElementById("fp-level-val").textContent = fpLevel.toFixed(1);
+	if (fpActive) {
+		_removeFpClip();
+		_applyFpClip();
+	}
+}
+
+function fpThickChange(val) {
+	fpThick = parseFloat(val);
+	document.getElementById("fp-thick-val").textContent = fpThick.toFixed(1);
+	if (fpActive) {
+		_removeFpClip();
+		_applyFpClip();
+	}
+}
+
+/** Add two horizontal clip boxes that sandwich the current floor level. */
+function _applyFpClip() {
+	if (!viewer || !viewer.scene) { return; }
+	// Potree clip volumes that restrict the visible slice
+	// (actual implementation depends on the Potree version / build used)
+	try {
+		var half = fpThick / 2;
+		var lo   = fpLevel - half;
+		var hi   = fpLevel + half;
+
+		// Store references so we can remove them later
+		viewer._fpClipLo = viewer.scene.addClipPlane(
+			new THREE.Vector3(0, 0, lo),
+			new THREE.Vector3(0, 0,  1)
+		);
+		viewer._fpClipHi = viewer.scene.addClipPlane(
+			new THREE.Vector3(0, 0, hi),
+			new THREE.Vector3(0, 0, -1)
+		);
+	} catch (err) {
+		// Potree clip-plane API varies; log and continue
+		console.warn("[FP] _applyFpClip:", err);
+	}
+}
+
+function _removeFpClip() {
+	if (!viewer || !viewer.scene) { return; }
+	try {
+		if (viewer._fpClipLo) { viewer.scene.removeClipPlane(viewer._fpClipLo); viewer._fpClipLo = null; }
+		if (viewer._fpClipHi) { viewer.scene.removeClipPlane(viewer._fpClipHi); viewer._fpClipHi = null; }
+	} catch (err) {
+		console.warn("[FP] _removeFpClip:", err);
+	}
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   SECTION / CLIPPING PLANE
+═══════════════════════════════════════════════════════════════════════ */
+function toggleSection() {
+	if (secActive) {
+		_removeSectionClip();
+		secActive = false;
+		document.getElementById("btn-sec-toggle").textContent = "Увімкнути";
+		document.getElementById("btn-sec-toggle").classList.remove("active");
+	} else {
+		_applySectionClip();
+		secActive = true;
+		document.getElementById("btn-sec-toggle").textContent = "Вимкнути";
+		document.getElementById("btn-sec-toggle").classList.add("active");
+	}
+}
+
+function secAxisChange(axis) {
+	secAxis = axis;
+	if (secActive) {
+		_removeSectionClip();
+		_applySectionClip();
+	}
+}
+
+function secPosChange(val) {
+	secPos = parseFloat(val);
+	document.getElementById("sec-pos-val").textContent = secPos.toFixed(1);
+	if (secActive) {
+		_removeSectionClip();
+		_applySectionClip();
+	}
+}
+
+function secFlipChange() {
+	secFlipped = document.getElementById("sec-flip").checked;
+	if (secActive) {
+		_removeSectionClip();
+		_applySectionClip();
+	}
+}
+
+function _buildSectionNormal() {
+	var sign = secFlipped ? -1 : 1;
+	if (secAxis === "X") { return new THREE.Vector3(sign, 0, 0); }
+	if (secAxis === "Y") { return new THREE.Vector3(0, sign, 0); }
+	return new THREE.Vector3(0, 0, sign);
+}
+
+function _buildSectionOrigin() {
+	if (secAxis === "X") { return new THREE.Vector3(secPos, 0, 0); }
+	if (secAxis === "Y") { return new THREE.Vector3(0, secPos, 0); }
+	return new THREE.Vector3(0, 0, secPos);
+}
+
+function _applySectionClip() {
+	if (!viewer || !viewer.scene) { return; }
+	try {
+		secVolume = viewer.scene.addClipPlane(
+			_buildSectionOrigin(),
+			_buildSectionNormal()
+		);
+	} catch (err) {
+		console.warn("[SEC] _applySectionClip:", err);
+	}
+}
+
+function _removeSectionClip() {
+	if (!viewer || !viewer.scene || !secVolume) { return; }
+	try {
+		viewer.scene.removeClipPlane(secVolume);
+	} catch (err) {
+		console.warn("[SEC] _removeSectionClip:", err);
+	}
+	secVolume = null;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   SAVE / LOAD STATE
+═══════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Collect the complete viewer state and push it to the savedStates array.
+ *
+ * Saved data includes:
+ *   - Camera position, target (lookAt), FOV
+ *   - Floor-plan mode: active flag, axis, level, thickness
+ *   - Section mode:    active flag, axis, position, flipped
+ */
+function ssSave() {
+	var cam    = viewer.scene.camera;
+	var target = (typeof viewer.scene.view.getPivot === "function")
+	             ? viewer.scene.view.getPivot()
+	             : viewer.scene.view.position.clone();
+
+	// ── Camera ──────────────────────────────────────────────────────────
+	var camData = {
+		px: cam.position.x, py: cam.position.y, pz: cam.position.z,
+		tx: target.x,       ty: target.y,       tz: target.z,
+		fov: viewer.getFOV ? viewer.getFOV() : cam.fov
+	};
+
+	// ── Floor-plan ──────────────────────────────────────────────────────
+	var fpData = {
+		active: fpActive,
+		axis:   fpAxisVal,
+		level:  fpLevel,
+		thick:  fpThick
+	};
+
+	// ── Section ─────────────────────────────────────────────────────────
+	// Read current UI values so we always persist the latest slider state,
+	// even when the section is temporarily disabled.
+	var secData = {
+		active:  secActive,
+		axis:    secAxis,
+		pos:     secPos,
+		flipped: secFlipped
+	};
+
+	var state = {
+		version: 2,
+		camera:    camData,
+		floorPlan: fpData,
+		section:   secData
+	};
+
+	var name = document.getElementById("ss-name").value.trim() ||
+	           ("Стан " + (savedStates.length + 1));
+
+	savedStates.push({ name: name, data: state });
+	document.getElementById("ss-name").value = "";
+
+	_ssRenderList();
+	_ssPersist();
+
+	console.log("[SS] saved:", name, state);
+}
+
+/**
+ * Restore a previously saved viewer state.
+ *
+ * Restoration order is important:
+ *   1. Restore section clipping plane (independent of camera).
+ *   2. Restore floor-plan — call enterFloorPlan(true) to skip the
+ *      automatic setTopView/setFrontView which would destroy the camera.
+ *   3. Restore camera position/target via requestAnimationFrame so that
+ *      any Potree-internal TWEEN animations that were triggered during
+ *      step 2 have already been superseded before we set the camera.
+ *
+ * @param {number} idx  Index into savedStates[]
+ */
+function ssLoad(idx) {
+	var entry = savedStates[idx];
+	if (!entry) { console.warn("[SS] ssLoad: index out of range", idx); return; }
+
+	var state = entry.data;
+	console.log("[SS] loading:", entry.name, state);
+
+	// ── 1. Section ──────────────────────────────────────────────────────
+	var sec = state.section;
+	if (sec) {
+		// Remove any existing clip before reconfiguring
+		if (secActive) { _removeSectionClip(); secActive = false; }
+
+		secAxis    = sec.axis    || "Z";
+		secPos     = typeof sec.pos     === "number" ? sec.pos     : 0;
+		secFlipped = typeof sec.flipped === "boolean" ? sec.flipped : false;
+
+		// Sync UI controls
+		var radios = document.querySelectorAll('input[name="secAxis"]');
+		radios.forEach(function (r) { r.checked = (r.value === secAxis); });
+
+		var slider = document.getElementById("sec-pos");
+		slider.value = secPos;
+		document.getElementById("sec-pos-val").textContent = secPos.toFixed(1);
+		document.getElementById("sec-flip").checked = secFlipped;
+
+		if (sec.active) {
+			_applySectionClip();
+			secActive = true;
+			document.getElementById("btn-sec-toggle").textContent = "Вимкнути";
+			document.getElementById("btn-sec-toggle").classList.add("active");
+		} else {
+			document.getElementById("btn-sec-toggle").textContent = "Увімкнути";
+			document.getElementById("btn-sec-toggle").classList.remove("active");
+		}
+	}
+
+	// ── 2. Floor-plan ───────────────────────────────────────────────────
+	var fp = state.floorPlan;
+	if (fp) {
+		// Remove existing floor-plan clips
+		if (fpActive) { _removeFpClip(); fpActive = false; }
+
+		fpAxisVal = fp.axis  || "top";
+		fpLevel   = typeof fp.level === "number" ? fp.level : 0;
+		fpThick   = typeof fp.thick === "number" ? fp.thick : 5;
+
+		// Sync UI controls
+		var fpRadios = document.querySelectorAll('input[name="fpAxis"]');
+		fpRadios.forEach(function (r) { r.checked = (r.value === fpAxisVal); });
+
+		document.getElementById("fp-level").value     = fpLevel;
+		document.getElementById("fp-level-val").textContent = fpLevel.toFixed(1);
+		document.getElementById("fp-thick").value     = fpThick;
+		document.getElementById("fp-thick-val").textContent = fpThick.toFixed(1);
+
+		if (fp.active) {
+			// Pass skipView=true so enterFloorPlan does NOT call
+			// viewer.setTopView() / viewer.setFrontView() — those calls
+			// launch TWEEN camera animations that overwrite the saved camera.
+			enterFloorPlan(true);
+		} else {
+			document.getElementById("btn-fp-toggle").textContent = "Увімкнути";
+			document.getElementById("btn-fp-toggle").classList.remove("active");
+		}
+	}
+
+	// ── 3. Camera ───────────────────────────────────────────────────────
+	// Defer camera restoration to the next animation frame so that
+	// all Potree-internal state changes (clip volumes, TWEEN starts, etc.)
+	// have been processed first.  A second rAF is used as an extra guard
+	// against lingering TWEEN updates.
+	var camData = state.camera;
+	if (camData) {
+		requestAnimationFrame(function () {
+			requestAnimationFrame(function () {
+				_restoreCamera(camData);
+			});
+		});
+	}
+}
+
+/**
+ * Apply saved camera position and orientation to the Potree viewer.
+ * Cancels any running TWEEN so the camera is not moved after we set it.
+ *
+ * @param {{ px,py,pz, tx,ty,tz, fov }} camData
+ */
+function _restoreCamera(camData) {
+	try {
+		// Stop any TWEEN animations that may be running (e.g. started by
+		// setTopView / setFrontView inside enterFloorPlan)
+		if (typeof TWEEN !== "undefined") {
+			TWEEN.removeAll();
+		}
+
+		var view = viewer.scene.view;
+
+		// Set position
+		view.position.set(camData.px, camData.py, camData.pz);
+
+		// Set look-at target / pivot
+		if (view.lookAt) {
+			view.lookAt(new THREE.Vector3(camData.tx, camData.ty, camData.tz));
+		} else if (view.direction) {
+			// Some Potree builds expose a direction vector instead
+			var dir = new THREE.Vector3(camData.tx - camData.px,
+			                            camData.ty - camData.py,
+			                            camData.tz - camData.pz).normalize();
+			view.direction.copy(dir);
+		}
+
+		// Restore FOV
+		if (camData.fov && viewer.setFOV) {
+			viewer.setFOV(camData.fov);
+		}
+
+		console.log("[SS] camera restored", camData);
+	} catch (err) {
+		console.error("[SS] _restoreCamera:", err);
+	}
+}
+
+/* ── Persistence helpers ─────────────────────────────────────────────── */
+
+function _ssPersist() {
+	try {
+		localStorage.setItem("zamok_savedStates", JSON.stringify(savedStates));
+	} catch (e) {
+		console.warn("[SS] localStorage write failed:", e);
+	}
+}
+
+function ssRestoreFromStorage() {
+	try {
+		var raw = localStorage.getItem("zamok_savedStates");
+		if (raw) {
+			savedStates = JSON.parse(raw);
+			_ssRenderList();
+		}
+	} catch (e) {
+		console.warn("[SS] localStorage read failed:", e);
+		savedStates = [];
+	}
+}
+
+function ssDelete(idx) {
+	savedStates.splice(idx, 1);
+	_ssRenderList();
+	_ssPersist();
+}
+
+function _ssRenderList() {
+	var ul = document.getElementById("slot-list");
+	ul.innerHTML = "";
+
+	if (savedStates.length === 0) {
+		ul.innerHTML = '<li><span style="color:#555;font-style:italic;">Немає збережень</span></li>';
+		return;
+	}
+
+	savedStates.forEach(function (entry, i) {
+		var li  = document.createElement("li");
+
+		var sp  = document.createElement("span");
+		sp.title = entry.name;
+		sp.textContent = entry.name;
+
+		var btnLoad = document.createElement("button");
+		btnLoad.textContent = "↩";
+		btnLoad.title = "Завантажити";
+		btnLoad.onclick = (function (idx) { return function () { ssLoad(idx); }; })(i);
+
+		var btnDel = document.createElement("button");
+		btnDel.textContent = "✕";
+		btnDel.title = "Видалити";
+		btnDel.className = "del";
+		btnDel.onclick = (function (idx) { return function () { ssDelete(idx); }; })(i);
+
+		li.appendChild(sp);
+		li.appendChild(btnLoad);
+		li.appendChild(btnDel);
+		ul.appendChild(li);
+	});
+}
+</script>
+
+</body>
+</html>
